@@ -1,0 +1,67 @@
+#!/usr/bin/python3
+import requests,json
+import os,sys,subprocess
+
+def get_IPlist(asn="15169",type="all"):
+	v4=[]
+	v6=[]
+	request_headers={"Host":"stat.ripe.net",
+		"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0",
+		"Connection": "keep-alive"}
+
+	req=requests.get("https://stat.ripe.net/data/ris-prefixes/data.json?resource="+asn+"&list_prefixes=true",headers=request_headers)
+	resp=json.loads(req.text)
+	if type=="all":
+		print("<> Requesting IP prefix data for ASN "+asn+" from stat.ripe.net...")
+		if  "data" in resp and "prefixes" in resp["data"]:
+			if "v4" in resp["data"]["prefixes"]:
+				if "originating" in resp["data"]["prefixes"]["v4"]:
+					print("[+] Adding "+str(len(resp["data"]["prefixes"]["v4"]["originating"]))+" IPv4 prefixes originated by ASN "+asn)
+					for prefix in resp["data"]["prefixes"]["v4"]["originating"]:
+						v4.append(prefix)
+
+			if "v4" in resp["data"]["prefixes"]:
+				if "transitting" in resp["data"]["prefixes"]["v4"]:
+					print("[+] Adding "+str(len(resp["data"]["prefixes"]["v4"]["transitting"]))+" IPv4 prefixes transitting ASN "+asn)
+					for prefix in resp["data"]["prefixes"]["v4"]["transitting"]:
+						v4.append(prefix)
+
+
+			if "v6" in resp["data"]["prefixes"]:
+				if "originating" in resp["data"]["prefixes"]["v6"]:
+					print("[+] Adding "+str(len(resp["data"]["prefixes"]["v6"]["originating"]))+" IPv6 prefixes originated by ASN "+asn)
+					for prefix in resp["data"]["prefixes"]["v6"]["originating"]:
+						v6.append(prefix)
+
+				if "transitting" in resp["data"]["prefixes"]["v6"]:
+					print("[+] Adding "+str(len(resp["data"]["prefixes"]["v6"]["transitting"]))+" IPv6 prefixes transitting ASN "+asn)
+					for prefix in resp["data"]["prefixes"]["v6"]["transitting"]:
+						v6.append(prefix)
+
+	return v4,v6
+def blockips_v4(iplist):
+	ipt="/sbin/iptables"
+	for ip in iplist:
+		subprocess.call([ipt,"-I","INPUT","-s",ip,'-j','DROP'])
+		subprocess.call([ipt,"-I","OUTPUT","-d",ip,'-j','DROP'])
+
+def blockips_v6(iplist):
+	ipt="/sbin/ip6tables"
+	for ip in iplist:
+		subprocess.call([ipt,"-I","INPUT","-s",ip,'-j','DROP'])
+		subprocess.call([ipt,"-I","OUTPUT","-d",ip,'-j','DROP'])
+
+def main():
+	if len(sys.argv)<2:
+		print("Usage:blockasn <asn> [prefix-type]")
+		sys.exit(1)
+	else:
+		v4,v6=get_IPlist(sys.argv[1])
+		blockips_v4(v4)
+		blockips_v6(v6)
+	sys.exit(0)
+
+if __name__ == "__main__":
+	main()
+
+
